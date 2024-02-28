@@ -1,0 +1,148 @@
+--DATA CLEANING
+
+--Checking for null or missing values
+
+SELECT * FROM orders
+WHERE day_since_prior_order IS NULL;
+-- 206209 null values detected
+
+
+--checking for duplicate rows 
+
+select product_id, product_name,aisle_id,department_id, count(*)
+from products
+group by product_id, product_name,aisle_id,department_id
+having count(*) >1;
+
+-- NO duplicate  was found
+              
+
+
+--MARKET BASKET ANALYSIS
+--Question 1: what are the top 10 products pairs that are most frequently purchased together?
+
+WITH PairedProducts AS(
+	SELECT order_id, product_id
+	FROM order_products_prior
+UNION ALL 
+	SELECT order_id, product_id 
+FROM order_products_train	
+)
+SELECT op.product_id AS product1,
+ot.product_id AS product2, COUNT(*) AS pair_count
+FROM PairedProducts AS op
+JOIN PairedProducts AS ot ON op.order_id = ot.order_id
+AND op.product_id < ot.product_id
+GROUP BY product1, product2
+ORDER BY pair_count DESC
+LIMIT 10;
+
+
+
+--what are the top 5 products that are mostly added to the cart first?
+
+WITH Combined_Product_Order AS(
+	SELECT product_id, add_to_cart_order
+	FROM order_products_prior
+	WHERE add_to_cart_order = 1
+UNION ALL
+	SELECT product_id, add_to_cart_order
+	FROM order_products_train 
+	WHERE add_to_cart_order = 1
+) 
+
+SELECT cp.product_id, p.product_name, COUNT (*) AS cart_order_count
+FROM  Combined_Product_Order AS  cp
+JOIN products p ON cp.product_id = p.product_id
+GROUP BY cp.product_id, p.product_name
+ORDER BY cart_order_count DESC
+LIMIT 5;
+
+
+
+-- How many unique products are typically included in a single order?
+
+SELECT order_id, COUNT(DISTINCT product_id) AS unique_products
+FROM order_products_train
+GROUP BY order_id;
+
+
+--2. Customer Segmentation
+--Categorize customers based on the total amount they've spent on orders?
+
+WITH Customer_spending AS(
+SELECT  user_id, COUNT(order_id) AS total_order
+FROM orders 
+GROUP BY user_id
+)
+SELECT user_id, total_order, CASE WHEN total_order >= 100 THEN 'High spender'
+WHEN total_order >= 60 THEN 'Moderate spender'
+WHEN total_order >= 40 THEN 'Average spender'
+ELSE 'Low spender' 
+END AS spending_category
+FROM Customer_spending;
+
+
+WITH Customer_purchase_frequency AS(
+SELECT  user_id, COUNT(order_id) AS purchase_count
+FROM orders 
+GROUP BY user_id
+)
+SELECT user_id, purchase_count, CASE WHEN purchase_count >= 70 THEN 'frequent buyer'
+WHEN purchase_count >= 40 THEN 'regular buyer'
+ELSE 'occassional buyer' 
+END AS customer_segment
+FROM Customer_purchase_frequency;
+
+
+--How many orders have been placed by each customer?
+
+SELECT user_id, COUNT(DISTINCT orders) AS no_of_order
+FROM orders
+GROUP BY user_id
+ORDER BY no_of_order DESC;
+
+--Average order per customer
+
+SELECT AVG(order_per_customer) AS Avg_customer_order
+FROM ( SELECT user_id, COUNT (DISTINCT order_id) AS order_per_customer
+FROM orders 
+GROUP BY user_id
+) AS order_per_customer;
+
+
+-- Seasonal Trend Analysis
+
+--What is the distribution of orders placed on different days of the week?
+
+SELECT order_dow, COUNT(*) AS num_of_orders
+FROM orders
+GROUP BY order_dow;
+
+-- Time of the day with most orders
+
+SELECT order_hour_of_day, COUNT(*) AS no_of_orders
+FROM orders
+GROUP BY order_hour_of_day
+ORDER BY no_of_orders;
+
+
+--Product Association Rules
+--	What are the top 5 product combinations that are most frequently purchased together?
+
+WITH Combined_products AS (
+	SELECT p1.product_id AS product1, p2.product_id AS product2
+FROM order_products_prior p1
+JOIN order_products_prior p2 ON p1.order_id =	p2.order_id
+	AND p1.product_id < p2.product_id
+)
+SELECT product1, product2, COUNT (*) AS frequency
+FROM Combined_products
+GROUP BY product1, product2
+ORDER BY frequency DESC
+LIMIT 5;
+
+
+
+
+ 
